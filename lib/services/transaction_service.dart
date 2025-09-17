@@ -1,10 +1,8 @@
 import 'package:flutter_pos_offline/models/models.dart';
 import 'database_helper.dart';
-import 'product_service.dart';
 
 class TransactionService {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  final ProductService _productService = ProductService();
 
   // Create transaction with items
   Future<int> createTransaction(

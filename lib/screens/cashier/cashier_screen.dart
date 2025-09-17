@@ -16,9 +16,7 @@ class CashierScreen extends StatefulWidget {
 }
 
 class _CashierScreenState extends State<CashierScreen> {
-  final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'All';
-
   String _searchQuery = '';
 
   void _performSearch(String query) async {
