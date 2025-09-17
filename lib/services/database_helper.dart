@@ -120,6 +120,13 @@ class DatabaseHelper {
         'icon': 'devices',
         'created_at': DateTime.now().toIso8601String(),
       },
+      {
+        'name': 'Uncategorized',
+        'description': 'Kategori lainnya',
+        'color': 0xFF9E9E9E,
+        'icon': 'uncategorized',
+        'created_at': DateTime.now().toIso8601String(),
+      },
     ];
 
     for (var category in defaultCategories) {

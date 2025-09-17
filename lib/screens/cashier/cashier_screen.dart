@@ -232,6 +232,33 @@ class _CashierScreenState extends State<CashierScreen> {
                 return ProductGrid(
                   products: filteredProducts,
                   onProductTap: (product) {
+                    if (product.stock <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${product.name} sudah habis'),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final maxQuantity = posProvider.getMaxQuantityForProduct(
+                      product.id!,
+                    );
+                    if (maxQuantity <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '${product.name} sudah mencapai batas maksimal di keranjang',
+                          ),
+                          backgroundColor: Colors.orange,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+
                     posProvider.addToCart(product);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(

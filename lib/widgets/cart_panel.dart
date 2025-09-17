@@ -6,7 +6,7 @@ import 'package:flutter_pos_offline/services/pos_provider.dart';
 import 'package:flutter_pos_offline/utils/constants.dart';
 
 class CartPanel extends StatelessWidget {
-  const CartPanel({Key? key}) : super(key: key);
+  const CartPanel({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -207,11 +207,11 @@ class CartItemCard extends StatelessWidget {
   final VoidCallback onRemove;
 
   const CartItemCard({
-    Key? key,
+    super.key,
     required this.cartItem,
     required this.onQuantityChanged,
     required this.onRemove,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -64,14 +64,32 @@ class PosProvider extends ChangeNotifier {
 
   // Add to cart
   void addToCart(Product product) {
+    // Validasi stok kosong
+    if (product.stock <= 0) {
+      // Tidak menambahkan, bisa tambahkan notifikasi jika perlu
+      return;
+    }
+
     final existingIndex = _cartItems.indexWhere(
       (item) => item.product.id == product.id,
     );
 
     if (existingIndex != -1) {
-      _cartItems[existingIndex].increaseQuantity();
+      // Cek apakah masih bisa ditambah
+      final currentQuantity = _cartItems[existingIndex].quantity;
+      if (currentQuantity < product.stock) {
+        _cartItems[existingIndex].increaseQuantity();
+      } else {
+        // Stok tidak mencukupi - bisa tambahkan notifikasi
+        return;
+      }
     } else {
-      _cartItems.add(CartItem(product: product));
+      // Produk baru, cek stok tersedia
+      if (product.stock > 0) {
+        _cartItems.add(CartItem(product: product));
+      } else {
+        return;
+      }
     }
     notifyListeners();
   }
@@ -89,10 +107,59 @@ class PosProvider extends ChangeNotifier {
       if (quantity <= 0) {
         _cartItems.removeAt(index);
       } else {
-        _cartItems[index].setQuantity(quantity);
+        // Validasi stok tersedia
+        final product = _cartItems[index].product;
+        if (quantity <= product.stock) {
+          _cartItems[index].setQuantity(quantity);
+        } else {
+          // Set ke maksimal stok yang tersedia
+          _cartItems[index].setQuantity(product.stock);
+        }
       }
       notifyListeners();
     }
+  }
+
+  bool isProductAvailable(Product product) {
+    return product.stock > 0;
+  }
+
+  // Get max quantity for a product in cart
+  int getMaxQuantityForProduct(int productId) {
+    final product = _products.firstWhere((p) => p.id == productId);
+    final existingCartItem = _cartItems.where(
+      (item) => item.product.id == productId,
+    );
+
+    if (existingCartItem.isNotEmpty) {
+      final currentQuantity = existingCartItem.first.quantity;
+      return product.stock - currentQuantity;
+    }
+
+    return product.stock;
+  }
+
+  // Validate cart stock before checkout
+  List<String> validateCartStock() {
+    final errors = <String>[];
+
+    for (var cartItem in _cartItems) {
+      // Refresh product data untuk pastikan stok terbaru
+      final currentProduct = _products.firstWhere(
+        (p) => p.id == cartItem.product.id,
+        orElse: () => cartItem.product,
+      );
+
+      if (currentProduct.stock <= 0) {
+        errors.add('${currentProduct.name} sudah habis');
+      } else if (cartItem.quantity > currentProduct.stock) {
+        errors.add(
+          '${currentProduct.name} hanya tersisa ${currentProduct.stock} item',
+        );
+      }
+    }
+
+    return errors;
   }
 
   // Clear cart
@@ -173,6 +240,7 @@ class PosProvider extends ChangeNotifier {
     await loadCategories();
   }
 
+  // Update category dan reload products
   Future<void> updateCategory(Category category) async {
     _isLoading = true;
     notifyListeners();
@@ -192,6 +260,7 @@ class PosProvider extends ChangeNotifier {
     }
   }
 
+  // Hapus kategori dan semua produk terkait
   Future<void> deleteCategory(int categoryId) async {
     _isLoading = true;
     notifyListeners();

@@ -480,7 +480,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _isProcessing ? null : _processPayment,
+              onPressed: _isProcessing ? null : _validateAndProcessPayment,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryGreen,
                 shape: RoundedRectangleBorder(
@@ -581,5 +581,60 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _isProcessing = false;
       });
     }
+  }
+
+  // Tambahkan method ini di _CheckoutScreenState
+  void _validateAndProcessPayment() async {
+    final posProvider = context.read<PosProvider>();
+
+    // Refresh product data
+    await posProvider.loadProducts();
+
+    // Validate stock
+    final stockErrors = posProvider.validateCartStock();
+    if (stockErrors.isNotEmpty) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Stok Tidak Mencukupi'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Item berikut memiliki masalah stok:'),
+                const SizedBox(height: 8),
+                ...stockErrors.map(
+                  (error) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(error)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // Proceed with normal payment processing
+    _processPayment();
   }
 }
