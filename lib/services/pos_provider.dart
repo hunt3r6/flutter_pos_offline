@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_pos_offline/models/models.dart';
-import 'package:flutter_pos_offline/services/categoty_service.dart';
+import 'package:flutter_pos_offline/services/category_service.dart';
 import 'package:flutter_pos_offline/services/database_helper.dart';
 import 'package:flutter_pos_offline/services/product_service.dart';
 import 'package:flutter_pos_offline/services/transaction_service.dart';
@@ -174,12 +174,44 @@ class PosProvider extends ChangeNotifier {
   }
 
   Future<void> updateCategory(Category category) async {
-    await _categoryService.updateCategory(category);
-    await loadCategories();
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      await _categoryService.updateCategory(category);
+
+      // Reload both categories and products untuk refresh UI
+      await loadCategories();
+      await loadProducts(); // Penting: reload products juga
+    } catch (e) {
+      debugPrint('Error updating category: $e');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> deleteCategory(int categoryId) async {
-    await _categoryService.deleteCategory(categoryId);
-    await loadCategories();
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final success = await _categoryService.deleteCategory(categoryId);
+
+      if (success) {
+        // Reload both categories and products
+        await loadCategories();
+        await loadProducts(); // Penting: reload products juga
+      } else {
+        throw Exception('Gagal menghapus kategori');
+      }
+    } catch (e) {
+      debugPrint('Error deleting category: $e');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 }

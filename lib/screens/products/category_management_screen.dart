@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_pos_offline/services/product_service.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_pos_offline/utils/constants.dart';
 import 'package:flutter_pos_offline/services/pos_provider.dart';
@@ -43,7 +44,13 @@ class CategoryManagementScreen extends StatelessWidget {
     );
   }
 
-  void _editCategory(BuildContext context, Category category) {
+  void _editCategory(BuildContext context, Category category) async {
+    // Check products count first
+    final productService = ProductService();
+    final productCount = await productService.countProductsByCategory(
+      category.name,
+    );
+
     final nameController = TextEditingController(text: category.name);
     final descriptionController = TextEditingController(
       text: category.description,
@@ -57,7 +64,37 @@ class CategoryManagementScreen extends StatelessWidget {
         content: StatefulBuilder(
           builder: (context, setDialogState) => Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Info produk yang menggunakan kategori ini
+              if (productCount > 0)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        color: Colors.blue,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$productCount produk menggunakan kategori ini',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Existing form fields
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
@@ -80,33 +117,35 @@ class CategoryManagementScreen extends StatelessWidget {
                   const Text('Warna: '),
                   const SizedBox(width: 8),
                   ...[
-                    AppColors.primaryGreen,
-                    Colors.blue,
-                    Colors.orange,
-                    Colors.purple,
-                    Colors.red,
-                    Colors.teal,
-                  ].map(
-                    (color) => GestureDetector(
-                      onTap: () {
-                        setDialogState(() {
-                          selectedColor = color;
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: selectedColor == color
-                              ? Border.all(color: Colors.black, width: 2)
-                              : null,
+                        AppColors.primaryGreen,
+                        Colors.blue,
+                        Colors.orange,
+                        Colors.purple,
+                        Colors.red,
+                        Colors.teal,
+                      ]
+                      .map(
+                        (color) => GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              selectedColor = color;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: selectedColor == color
+                                  ? Border.all(color: Colors.black, width: 2)
+                                  : null,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
+                      )
+                      .toList(),
                 ],
               ),
             ],
@@ -138,20 +177,33 @@ class CategoryManagementScreen extends StatelessWidget {
                 await context.read<PosProvider>().updateCategory(
                   updatedCategory,
                 );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Kategori berhasil diupdate'),
-                    backgroundColor: AppColors.primaryGreen,
-                  ),
-                );
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+
+                  String message = 'Kategori berhasil diupdate';
+                  if (productCount > 0 &&
+                      category.name != nameController.text.trim()) {
+                    message += '\n$productCount produk telah diupdate';
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(message),
+                      backgroundColor: AppColors.primaryGreen,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Update'),
@@ -161,13 +213,58 @@ class CategoryManagementScreen extends StatelessWidget {
     );
   }
 
-  void _deleteCategory(BuildContext context, Category category) {
+  void _deleteCategory(BuildContext context, Category category) async {
+    final productService = ProductService();
+    final productCount = await productService.countProductsByCategory(
+      category.name,
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus Kategori'),
-        content: Text(
-          'Apakah Anda yakin ingin menghapus kategori ${category.name}?\n\nPeringatan: Produk dalam kategori ini akan kehilangan kategorinya.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Apakah Anda yakin ingin menghapus kategori ${category.name}?',
+            ),
+            if (productCount > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$productCount produk menggunakan kategori ini',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Produk-produk tersebut akan dipindah ke kategori "Uncategorized"',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -179,19 +276,31 @@ class CategoryManagementScreen extends StatelessWidget {
               Navigator.pop(context);
               try {
                 await context.read<PosProvider>().deleteCategory(category.id!);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Kategori ${category.name} berhasil dihapus'),
-                    backgroundColor: AppColors.primaryGreen,
-                  ),
-                );
+
+                if (context.mounted) {
+                  String message = 'Kategori ${category.name} berhasil dihapus';
+                  if (productCount > 0) {
+                    message +=
+                        '\n$productCount produk dipindah ke "Uncategorized"';
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(message),
+                      backgroundColor: AppColors.primaryGreen,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Hapus', style: TextStyle(color: Colors.red)),
