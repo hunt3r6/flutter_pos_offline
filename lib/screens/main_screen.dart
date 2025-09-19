@@ -120,6 +120,10 @@ class _MainScreenState extends State<MainScreen> {
       builder: (_) => const _ResetDatabaseDialog(),
     );
 
+    if (!mounted) {
+      return;
+    }
+
     if (confirm != true) {
       return;
     }

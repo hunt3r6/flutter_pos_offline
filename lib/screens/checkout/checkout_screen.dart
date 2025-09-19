@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_pos_offline/screens/checkout/payment_success_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_pos_offline/services/pos_provider.dart';
 import 'package:flutter_pos_offline/utils/constants.dart';
+import 'package:flutter_pos_offline/utils/payment_method.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -18,15 +19,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _customerPhoneController =
       TextEditingController();
 
-  String _selectedPaymentMethod = 'cash';
+  late final NumberFormat _currencyFormatter;
+  PaymentMethod _selectedPaymentMethod = PaymentMethod.cash;
   bool _isProcessing = false;
 
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {'id': 'cash', 'name': 'Tunai', 'icon': Icons.money},
-    {'id': 'card', 'name': 'Kartu', 'icon': Icons.credit_card},
-    {'id': 'qris', 'name': 'QRIS', 'icon': Icons.qr_code},
-    {'id': 'ewallet', 'name': 'E-Wallet', 'icon': Icons.account_balance_wallet},
-  ];
+  bool get _isCashPayment => _selectedPaymentMethod == PaymentMethod.cash;
+
+  @override
+  void initState() {
+    super.initState();
+    _currencyFormatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _customerNameController.dispose();
+    _customerPhoneController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,13 +55,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       ),
       body: Consumer<PosProvider>(
-        builder: (context, posProvider, child) {
-          final formatter = NumberFormat.currency(
-            locale: 'id_ID',
-            symbol: 'Rp ',
-            decimalDigits: 0,
-          );
-
+        builder: (context, posProvider, _) {
           return Column(
             children: [
               Expanded(
@@ -55,31 +64,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Order Summary
-                      _buildOrderSummary(posProvider, formatter),
-
+                      _buildOrderSummary(posProvider),
                       const SizedBox(height: 24),
-
-                      // Customer Information
                       _buildCustomerInfo(),
-
                       const SizedBox(height: 24),
-
-                      // Payment Method
                       _buildPaymentMethod(),
-
-                      const SizedBox(height: 24),
-
-                      // Payment Amount (for cash)
-                      if (_selectedPaymentMethod == 'cash')
-                        _buildPaymentAmount(posProvider.cartTotal, formatter),
+                      if (_isCashPayment) ...[
+                        const SizedBox(height: 24),
+                        _buildPaymentAmount(posProvider.cartTotal),
+                      ],
                     ],
                   ),
                 ),
               ),
-
-              // Process Payment Button
-              _buildProcessButton(posProvider, formatter),
+              _buildProcessButton(posProvider),
             ],
           );
         },
@@ -87,7 +85,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildOrderSummary(PosProvider posProvider, NumberFormat formatter) {
+  Widget _buildOrderSummary(PosProvider posProvider) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -105,43 +103,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Items
-            ...posProvider.cartItems
-                .map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text('${item.product.name} x${item.quantity}'),
-                        ),
-                        Text(
-                          formatter.format(item.subtotal),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ],
+            ...posProvider.cartItems.map(
+              (item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text('${item.product.name} x${item.quantity}'),
                     ),
-                  ),
-                )
-                .toList(),
-
+                    Text(
+                      _currencyFormatter.format(item.subtotal),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const Divider(),
-
-            // Totals
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Subtotal:'),
-                Text(formatter.format(posProvider.cartSubtotal)),
+                Text(_currencyFormatter.format(posProvider.cartSubtotal)),
               ],
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Pajak (10%):'),
-                Text(formatter.format(posProvider.cartTax)),
+                Text(_currencyFormatter.format(posProvider.cartTax)),
               ],
             ),
             const Divider(),
@@ -153,7 +144,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  formatter.format(posProvider.cartTotal),
+                  _currencyFormatter.format(posProvider.cartTotal),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -186,45 +177,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             TextField(
               controller: _customerNameController,
-              decoration: InputDecoration(
-                labelText: 'Nama Pelanggan',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppColors.primaryGreen,
-                    width: 2,
-                  ),
-                ),
-              ),
+              decoration: _textFieldDecoration('Nama Pelanggan'),
             ),
-
             const SizedBox(height: 12),
-
             TextField(
               controller: _customerPhoneController,
               keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'Nomor Telepon',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppColors.primaryGreen,
-                    width: 2,
-                  ),
-                ),
-              ),
+              decoration: _textFieldDecoration('Nomor Telepon'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  InputDecoration _textFieldDecoration(String labelText) {
+    return InputDecoration(
+      labelText: labelText,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.primaryGreen, width: 2),
       ),
     );
   }
@@ -247,7 +222,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -257,57 +231,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 mainAxisSpacing: 8,
                 childAspectRatio: 3,
               ),
-              itemCount: _paymentMethods.length,
+              itemCount: PaymentMethod.values.length,
               itemBuilder: (context, index) {
-                final method = _paymentMethods[index];
-                final isSelected = _selectedPaymentMethod == method['id'];
-
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      _selectedPaymentMethod = method['id'];
-                      if (_selectedPaymentMethod != 'cash') {
-                        _amountController.clear();
-                      }
-                    });
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.primaryGreen
-                            : AppColors.grey,
-                        width: isSelected ? 2 : 1,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      color: isSelected
-                          ? AppColors.lightGreen.withOpacity(0.1)
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          method['icon'],
-                          color: isSelected
-                              ? AppColors.primaryGreen
-                              : AppColors.grey,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          method['name'],
-                          style: TextStyle(
-                            color: isSelected
-                                ? AppColors.primaryGreen
-                                : AppColors.grey,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                final method = PaymentMethod.values[index];
+                final isSelected = _selectedPaymentMethod == method;
+                return _PaymentMethodTile(
+                  method: method,
+                  isSelected: isSelected,
+                  onTap: () => _onPaymentMethodSelected(method),
                 );
               },
             ),
@@ -317,7 +248,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildPaymentAmount(double total, NumberFormat formatter) {
+  Widget _buildPaymentAmount(double total) {
+    final quickAmounts = <double>[total, total + 50000, total + 100000];
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -335,44 +268,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Jumlah yang dibayar',
-                prefixText: 'Rp ',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppColors.primaryGreen,
-                    width: 2,
-                  ),
-                ),
-              ),
+              decoration: _textFieldDecoration(
+                'Jumlah yang dibayar',
+              ).copyWith(prefixText: 'Rp '),
+              onChanged: (_) => setState(() {}),
             ),
-
             const SizedBox(height: 8),
-
-            // Quick amount buttons
             Row(
               children: [
-                _buildQuickAmountButton(total, formatter),
-                const SizedBox(width: 8),
-                _buildQuickAmountButton(total + 50000, formatter),
-                const SizedBox(width: 8),
-                _buildQuickAmountButton(total + 100000, formatter),
+                for (int i = 0; i < quickAmounts.length; i++) ...[
+                  Expanded(child: _buildQuickAmountButton(quickAmounts[i])),
+                  if (i < quickAmounts.length - 1) const SizedBox(width: 8),
+                ],
               ],
             ),
-
-            // Change calculation
             if (_amountController.text.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: _buildChangeDisplay(total, formatter),
+                child: _buildChangeDisplay(total),
               ),
           ],
         ),
@@ -380,35 +296,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildQuickAmountButton(double amount, NumberFormat formatter) {
-    return Expanded(
-      child: OutlinedButton(
-        onPressed: () {
-          _amountController.text = amount.toInt().toString();
-          setState(() {});
-        },
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.primaryGreen),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: Text(
-          formatter.format(amount),
-          style: const TextStyle(color: AppColors.primaryGreen, fontSize: 12),
-        ),
+  Widget _buildQuickAmountButton(double amount) {
+    return OutlinedButton(
+      onPressed: () => _onQuickAmountSelected(amount),
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: AppColors.primaryGreen),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(
+        _currencyFormatter.format(amount),
+        style: const TextStyle(color: AppColors.primaryGreen, fontSize: 12),
       ),
     );
   }
 
-  Widget _buildChangeDisplay(double total, NumberFormat formatter) {
+  void _onQuickAmountSelected(double amount) {
+    _amountController.text = amount.toInt().toString();
+    setState(() {});
+  }
+
+  Widget _buildChangeDisplay(double total) {
     final amountPaid = double.tryParse(_amountController.text) ?? 0;
     final change = amountPaid - total;
+    final changeIsPositive = change >= 0;
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: change >= 0
-            ? AppColors.lightGreen.withOpacity(0.1)
-            : Colors.red.withOpacity(0.1),
+        color: changeIsPositive
+            ? AppColors.lightGreen.withValues(alpha: 0.1)
+            : Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -419,11 +336,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           Text(
-            formatter.format(change),
+            _currencyFormatter.format(change),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: change >= 0 ? AppColors.primaryGreen : Colors.red,
+              color: changeIsPositive ? AppColors.primaryGreen : Colors.red,
             ),
           ),
         ],
@@ -431,7 +348,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildProcessButton(PosProvider posProvider, NumberFormat formatter) {
+  Widget _buildProcessButton(PosProvider posProvider) {
+    final total = posProvider.cartTotal;
+    final shouldShowCashSummary =
+        _isCashPayment && _amountController.text.isNotEmpty;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
@@ -447,8 +368,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_selectedPaymentMethod == 'cash' &&
-              _amountController.text.isNotEmpty)
+          if (shouldShowCashSummary)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -465,7 +385,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    formatter.format(posProvider.cartTotal),
+                    _currencyFormatter.format(total),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -475,7 +395,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ],
               ),
             ),
-
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -511,12 +430,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  void _processPayment() async {
-    final posProvider = context.read<PosProvider>();
+  void _onPaymentMethodSelected(PaymentMethod method) {
+    if (_selectedPaymentMethod == method) {
+      return;
+    }
+    setState(() {
+      _selectedPaymentMethod = method;
+      if (!_isCashPayment) {
+        _amountController.clear();
+      }
+    });
+  }
 
-    // Validation
-    if (_selectedPaymentMethod == 'cash' && _amountController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+  Future<void> _processPayment() async {
+    final posProvider = context.read<PosProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final totalDue = posProvider.cartTotal;
+
+    if (_isCashPayment && _amountController.text.isEmpty) {
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Masukkan jumlah pembayaran'),
           backgroundColor: Colors.red,
@@ -525,10 +458,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    if (_selectedPaymentMethod == 'cash') {
+    if (_isCashPayment) {
       final amountPaid = double.tryParse(_amountController.text) ?? 0;
-      if (amountPaid < posProvider.cartTotal) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (amountPaid < totalDue) {
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Jumlah bayar tidak mencukupi'),
             backgroundColor: Colors.red,
@@ -538,17 +471,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     }
 
-    setState(() {
-      _isProcessing = true;
-    });
+    setState(() => _isProcessing = true);
+
+    final amountPaid = _isCashPayment
+        ? (double.tryParse(_amountController.text) ?? totalDue)
+        : totalDue;
 
     try {
-      final amountPaid = _selectedPaymentMethod == 'cash'
-          ? (double.tryParse(_amountController.text) ?? posProvider.cartTotal)
-          : posProvider.cartTotal;
-
       final transactionId = await posProvider.processTransaction(
-        paymentMethod: _selectedPaymentMethod,
+        paymentMethod: _selectedPaymentMethod.id,
         amountPaid: amountPaid,
         customerName: _customerNameController.text.isEmpty
             ? null
@@ -558,83 +489,136 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             : _customerPhoneController.text,
       );
 
-      // Navigate to success screen
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PaymentSuccessScreen(
-              transactionId: transactionId,
-              paymentMethod: _selectedPaymentMethod,
-              amountPaid: amountPaid,
-              change: amountPaid - posProvider.cartTotal,
-            ),
-          ),
-        );
+      if (!mounted) {
+        return;
       }
+
+      navigator.pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => PaymentSuccessScreen(
+            transactionId: transactionId,
+            paymentMethod: _selectedPaymentMethod.id,
+            amountPaid: amountPaid,
+            change: amountPaid - totalDue,
+          ),
+        ),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
-  // Tambahkan method ini di _CheckoutScreenState
-  void _validateAndProcessPayment() async {
+  Future<void> _validateAndProcessPayment() async {
     final posProvider = context.read<PosProvider>();
-
-    // Refresh product data
     await posProvider.loadProducts();
 
-    // Validate stock
-    final stockErrors = posProvider.validateCartStock();
-    if (stockErrors.isNotEmpty) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Stok Tidak Mencukupi'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Item berikut memiliki masalah stok:'),
-                const SizedBox(height: 8),
-                ...stockErrors.map(
-                  (error) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.red,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(error)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
+    if (!mounted) {
       return;
     }
 
-    // Proceed with normal payment processing
-    _processPayment();
+    final stockErrors = posProvider.validateCartStock();
+    if (stockErrors.isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _StockErrorDialog(errors: stockErrors),
+      );
+      return;
+    }
+
+    await _processPayment();
+  }
+}
+
+class _PaymentMethodTile extends StatelessWidget {
+  const _PaymentMethodTile({
+    required this.method,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final PaymentMethod method;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isSelected ? AppColors.primaryGreen : AppColors.grey,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          color: isSelected
+              ? AppColors.lightGreen.withValues(alpha: 0.1)
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              method.icon,
+              color: isSelected ? AppColors.primaryGreen : AppColors.grey,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              method.label,
+              style: TextStyle(
+                color: isSelected ? AppColors.primaryGreen : AppColors.grey,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StockErrorDialog extends StatelessWidget {
+  const _StockErrorDialog({required this.errors});
+
+  final List<String> errors;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Stok Tidak Mencukupi'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Item berikut memiliki masalah stok:'),
+          const SizedBox(height: 8),
+          ...errors.map(
+            (error) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(error)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ],
+    );
   }
 }
