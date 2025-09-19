@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_pos_offline/models/models.dart';
 import 'package:flutter_pos_offline/screens/search/advanced_search_screen.dart';
 import 'package:flutter_pos_offline/services/pos_provider.dart';
 import 'package:flutter_pos_offline/services/search_service.dart';
@@ -16,27 +17,23 @@ class CashierScreen extends StatefulWidget {
 }
 
 class _CashierScreenState extends State<CashierScreen> {
+  final SearchService _searchService = SearchService();
   String _selectedCategory = 'All';
   String _searchQuery = '';
 
   void _performSearch(String query) async {
-    final searchService = SearchService();
+    setState(() {
+      _searchQuery = query;
+    });
+
     try {
-      final results = await searchService.searchProducts(
+      await _searchService.searchProducts(
         query,
         category: _selectedCategory == 'All' ? null : _selectedCategory,
       );
-
-      // Update filtered products atau handle search results
-      setState(() {
-        _searchQuery = query;
-      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (!mounted) return;
+      _showSnackBar('Error: $e', backgroundColor: Colors.red);
     }
   }
 
@@ -44,233 +41,14 @@ class _CashierScreenState extends State<CashierScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
-      appBar: AppBar(
-        title: const Text(
-          'Kasir POS',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: AppColors.primaryGreen,
-        elevation: 0,
-        actions: [
-          Consumer<PosProvider>(
-            builder: (context, posProvider, child) {
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.shopping_cart),
-                    onPressed: () {
-                      _showCartDialog(context);
-                    },
-                  ),
-                  if (posProvider.cartItemCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          '${posProvider.cartItemCount}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: Column(
         children: [
-          // Search and Filter Section
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: SearchWidget(
-                        hintText: 'Cari produk atau scan barcode...',
-                        onSearch: (query) {
-                          setState(() {
-                            _searchQuery = query;
-                          });
-                          _performSearch(query);
-                        },
-                        showSuggestions: true,
-                        showRecentSearches: true,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AdvancedSearchScreen(),
-                        ),
-                      ),
-                      icon: const Icon(
-                        Icons.tune,
-                        color: AppColors.primaryGreen,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.lightGreen.withOpacity(0.2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        // TODO: Implement barcode scanner
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Fitur scanner akan ditambahkan'),
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.qr_code_scanner,
-                        color: AppColors.primaryGreen,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.lightGreen.withOpacity(0.2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Category Filter
-                Consumer<PosProvider>(
-                  builder: (context, posProvider, child) {
-                    return SizedBox(
-                      height: 40,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _buildCategoryChip('All', _selectedCategory == 'All'),
-                          ...posProvider.categories
-                              .map(
-                                (category) => _buildCategoryChip(
-                                  category.name,
-                                  _selectedCategory == category.name,
-                                ),
-                              )
-                              .toList(),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Product Grid
+          _buildSearchAndFilterSection(),
           Expanded(
             child: Consumer<PosProvider>(
               builder: (context, posProvider, child) {
-                var filteredProducts = posProvider.products;
-
-                // Apply search filter
-                if (_searchQuery.isNotEmpty) {
-                  filteredProducts = filteredProducts.where((product) {
-                    return product.name.toLowerCase().contains(
-                          _searchQuery.toLowerCase(),
-                        ) ||
-                        (product.barcode?.contains(_searchQuery) ?? false);
-                  }).toList();
-                }
-
-                // Apply category filter
-                if (_selectedCategory != 'All') {
-                  filteredProducts = filteredProducts
-                      .where((p) => p.category == _selectedCategory)
-                      .toList();
-                }
-
-                if (filteredProducts.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: 80,
-                          color: AppColors.grey,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Belum ada produk',
-                          style: TextStyle(fontSize: 18, color: AppColors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ProductGrid(
-                  products: filteredProducts,
-                  onProductTap: (product) {
-                    if (product.stock <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${product.name} sudah habis'),
-                          backgroundColor: Colors.red,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                      return;
-                    }
-
-                    final maxQuantity = posProvider.getMaxQuantityForProduct(
-                      product.id!,
-                    );
-                    if (maxQuantity <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '${product.name} sudah mencapai batas maksimal di keranjang',
-                          ),
-                          backgroundColor: Colors.orange,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                      return;
-                    }
-
-                    posProvider.addToCart(product);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${product.name} ditambahkan ke keranjang',
-                        ),
-                        backgroundColor: AppColors.primaryGreen,
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                );
+                return _buildProductContent(posProvider);
               },
             ),
           ),
@@ -296,6 +74,222 @@ class _CashierScreenState extends State<CashierScreen> {
           color: isSelected ? Colors.white : AppColors.primaryGreen,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
+      ),
+    );
+  }
+
+  AppBar _buildAppBar() {
+    return AppBar(
+      title: const Text(
+        'Kasir POS',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      backgroundColor: AppColors.primaryGreen,
+      elevation: 0,
+      actions: [_buildCartAction()],
+    );
+  }
+
+  Widget _buildCartAction() {
+    return Consumer<PosProvider>(
+      builder: (context, posProvider, child) {
+        return Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.shopping_cart),
+              onPressed: () => _showCartDialog(context),
+            ),
+            if (posProvider.cartItemCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    '${posProvider.cartItemCount}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchAndFilterSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.white,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SearchWidget(
+                  hintText: 'Cari produk atau scan barcode...',
+                  onSearch: _performSearch,
+                  showSuggestions: true,
+                  showRecentSearches: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _openAdvancedSearch,
+                icon: const Icon(Icons.tune, color: AppColors.primaryGreen),
+                style: _secondaryActionStyle,
+              ),
+              IconButton(
+                onPressed: _showScannerComingSoon,
+                icon: const Icon(
+                  Icons.qr_code_scanner,
+                  color: AppColors.primaryGreen,
+                ),
+                style: _secondaryActionStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Consumer<PosProvider>(
+            builder: (context, posProvider, child) {
+              return SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _buildCategoryChip('All', _selectedCategory == 'All'),
+                    ...posProvider.categories.map(
+                      (category) => _buildCategoryChip(
+                        category.name,
+                        _selectedCategory == category.name,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductContent(PosProvider posProvider) {
+    final filteredProducts = _filterProducts(posProvider);
+
+    if (filteredProducts.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return ProductGrid(
+      products: filteredProducts,
+      onProductTap: (product) => _handleProductTap(posProvider, product),
+    );
+  }
+
+  List<Product> _filterProducts(PosProvider posProvider) {
+    var filteredProducts = posProvider.products;
+
+    if (_searchQuery.isNotEmpty) {
+      filteredProducts = filteredProducts.where((product) {
+        return product.name.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            ) ||
+            (product.barcode?.contains(_searchQuery) ?? false);
+      }).toList();
+    }
+
+    if (_selectedCategory != 'All') {
+      filteredProducts = filteredProducts
+          .where((p) => p.category == _selectedCategory)
+          .toList();
+    }
+
+    return filteredProducts;
+  }
+
+  Widget _buildEmptyState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 80, color: AppColors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Belum ada produk',
+            style: TextStyle(fontSize: 18, color: AppColors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleProductTap(PosProvider posProvider, Product product) {
+    if (product.stock <= 0) {
+      _showSnackBar('${product.name} sudah habis', backgroundColor: Colors.red);
+      return;
+    }
+
+    final maxQuantity = posProvider.getMaxQuantityForProduct(product.id!);
+    if (maxQuantity <= 0) {
+      _showSnackBar(
+        '${product.name} sudah mencapai batas maksimal di keranjang',
+        backgroundColor: Colors.orange,
+      );
+      return;
+    }
+
+    posProvider.addToCart(product);
+    _showSnackBar(
+      '${product.name} ditambahkan ke keranjang',
+      backgroundColor: AppColors.primaryGreen,
+      duration: const Duration(seconds: 1),
+    );
+  }
+
+  ButtonStyle get _secondaryActionStyle {
+    return IconButton.styleFrom(
+      backgroundColor: AppColors.lightGreen.withValues(alpha: 0.2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+
+  void _showScannerComingSoon() {
+    _showSnackBar('Fitur scanner akan ditambahkan');
+  }
+
+  void _openAdvancedSearch() {
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdvancedSearchScreen()),
+    );
+  }
+
+  void _showSnackBar(
+    String message, {
+    Color? backgroundColor,
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+        duration: duration,
       ),
     );
   }
