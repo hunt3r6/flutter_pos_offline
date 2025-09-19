@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_pos_offline/models/models.dart';
 import 'package:flutter_pos_offline/screens/checkout/checkout_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_pos_offline/services/pos_provider.dart';
 import 'package:flutter_pos_offline/utils/constants.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+final NumberFormat _currencyFormatter = NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
 
 class CartPanel extends StatelessWidget {
   const CartPanel({super.key});
@@ -56,7 +63,7 @@ class CartPanel extends StatelessWidget {
           // Cart Items
           Expanded(
             child: Consumer<PosProvider>(
-              builder: (context, posProvider, child) {
+              builder: (context, posProvider, _) {
                 if (posProvider.cartItems.isEmpty) {
                   return const Center(
                     child: Column(
@@ -80,19 +87,14 @@ class CartPanel extends StatelessWidget {
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: posProvider.cartItems.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (_, index) {
                     final cartItem = posProvider.cartItems[index];
                     return CartItemCard(
                       cartItem: cartItem,
-                      onQuantityChanged: (quantity) {
-                        posProvider.updateCartItemQuantity(
-                          cartItem.product.id!,
-                          quantity,
-                        );
-                      },
-                      onRemove: () {
-                        posProvider.removeFromCart(cartItem.product.id!);
-                      },
+                      onQuantityChanged: (value) => posProvider
+                          .updateCartItemQuantity(cartItem.product.id!, value),
+                      onRemove: () =>
+                          posProvider.removeFromCart(cartItem.product.id!),
                     );
                   },
                 );
@@ -102,16 +104,10 @@ class CartPanel extends StatelessWidget {
 
           // Total Section
           Consumer<PosProvider>(
-            builder: (context, posProvider, child) {
+            builder: (context, posProvider, _) {
               if (posProvider.cartItems.isEmpty) {
                 return const SizedBox();
               }
-
-              final formatter = NumberFormat.currency(
-                locale: 'id_ID',
-                symbol: 'Rp ',
-                decimalDigits: 0,
-              );
 
               return Container(
                 padding: const EdgeInsets.all(16),
@@ -127,14 +123,16 @@ class CartPanel extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Subtotal:'),
-                        Text(formatter.format(posProvider.cartSubtotal)),
+                        Text(
+                          _currencyFormatter.format(posProvider.cartSubtotal),
+                        ),
                       ],
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Pajak (10%):'),
-                        Text(formatter.format(posProvider.cartTax)),
+                        Text(_currencyFormatter.format(posProvider.cartTax)),
                       ],
                     ),
                     const Divider(),
@@ -149,7 +147,7 @@ class CartPanel extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          formatter.format(posProvider.cartTotal),
+                          _currencyFormatter.format(posProvider.cartTotal),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -202,10 +200,6 @@ class CartPanel extends StatelessWidget {
 }
 
 class CartItemCard extends StatelessWidget {
-  final dynamic cartItem; // CartItem from models
-  final Function(int) onQuantityChanged;
-  final VoidCallback onRemove;
-
   const CartItemCard({
     super.key,
     required this.cartItem,
@@ -213,14 +207,12 @@ class CartItemCard extends StatelessWidget {
     required this.onRemove,
   });
 
+  final CartItem cartItem;
+  final ValueChanged<int> onQuantityChanged;
+  final VoidCallback onRemove;
+
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
-
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -257,7 +249,7 @@ class CartItemCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    formatter.format(cartItem.product.price),
+                    _currencyFormatter.format(cartItem.product.price),
                     style: const TextStyle(
                       color: AppColors.primaryGreen,
                       fontWeight: FontWeight.w600,

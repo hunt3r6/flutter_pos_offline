@@ -3,15 +3,21 @@ import 'package:intl/intl.dart';
 import 'package:flutter_pos_offline/models/models.dart';
 import 'package:flutter_pos_offline/utils/constants.dart';
 
-class ProductGrid extends StatelessWidget {
-  final List<Product> products;
-  final Function(Product) onProductTap;
+final NumberFormat _currencyFormatter = NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+);
 
+class ProductGrid extends StatelessWidget {
   const ProductGrid({
     super.key,
     required this.products,
     required this.onProductTap,
   });
+
+  final List<Product> products;
+  final ValueChanged<Product> onProductTap;
 
   @override
   Widget build(BuildContext context) {
@@ -38,19 +44,13 @@ class ProductGrid extends StatelessWidget {
 }
 
 class ProductCard extends StatelessWidget {
+  const ProductCard({super.key, required this.product, required this.onTap});
+
   final Product product;
   final VoidCallback onTap;
 
-  const ProductCard({Key? key, required this.product, required this.onTap})
-    : super(key: key);
-
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
     final isOutOfStock = product.stock <= 0;
     final isLowStock = product.stock > 0 && product.stock <= 5;
 
@@ -79,7 +79,7 @@ class ProductCard extends StatelessWidget {
                         ),
                         gradient: isOutOfStock
                             ? LinearGradient(
-                                colors: [
+                                colors: <Color>[
                                   Colors.grey.shade400,
                                   Colors.grey.shade500,
                                 ],
@@ -142,7 +142,7 @@ class ProductCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                formatter.format(product.price),
+                                _currencyFormatter.format(product.price),
                                 style: TextStyle(
                                   color: isOutOfStock
                                       ? Colors.grey
@@ -158,10 +158,12 @@ class ProductCard extends StatelessWidget {
                                 ),
                                 decoration: BoxDecoration(
                                   color: isOutOfStock
-                                      ? Colors.red.withOpacity(0.2)
+                                      ? Colors.red.withValues(alpha: 0.2)
                                       : isLowStock
-                                      ? Colors.orange.withOpacity(0.2)
-                                      : AppColors.lightGreen.withOpacity(0.2),
+                                      ? Colors.orange.withValues(alpha: 0.2)
+                                      : AppColors.lightGreen.withValues(
+                                          alpha: 0.2,
+                                        ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -195,17 +197,17 @@ class ProductCard extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                   ),
                   child: Center(
                     child: Container(
-                      padding: EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        borderRadius: BorderRadius.all(Radius.circular(20)),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         'STOK HABIS',

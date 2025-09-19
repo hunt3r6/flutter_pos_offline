@@ -1,15 +1,10 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_pos_offline/utils/constants.dart';
-import 'package:flutter_pos_offline/services/search_service.dart';
 import 'dart:async';
 
-class SearchWidget extends StatefulWidget {
-  final String hintText;
-  final Function(String) onSearch;
-  final Function(String)? onSuggestionTap;
-  final bool showSuggestions;
-  final bool showRecentSearches;
+import 'package:flutter/material.dart';
+import 'package:flutter_pos_offline/services/search_service.dart';
+import 'package:flutter_pos_offline/utils/constants.dart';
 
+class SearchWidget extends StatefulWidget {
   const SearchWidget({
     super.key,
     required this.hintText,
@@ -19,19 +14,25 @@ class SearchWidget extends StatefulWidget {
     this.showRecentSearches = true,
   });
 
+  final String hintText;
+  final ValueChanged<String> onSearch;
+  final ValueChanged<String>? onSuggestionTap;
+  final bool showSuggestions;
+  final bool showRecentSearches;
+
   @override
   State<SearchWidget> createState() => _SearchWidgetState();
 }
 
 class _SearchWidgetState extends State<SearchWidget> {
   final TextEditingController _controller = TextEditingController();
-  final SearchService _searchService = SearchService();
   final FocusNode _focusNode = FocusNode();
+  final SearchService _searchService = SearchService();
 
-  List<String> _suggestions = [];
-  List<String> _recentSearches = [];
-  bool _showDropdown = false;
   Timer? _debounce;
+  List<String> _suggestions = <String>[];
+  List<String> _recentSearches = <String>[];
+  bool _showDropdown = false;
 
   @override
   void initState() {
@@ -62,58 +63,72 @@ class _SearchWidgetState extends State<SearchWidget> {
     }
   }
 
-  void _loadRecentSearches() async {
+  Future<void> _loadRecentSearches() async {
     if (widget.showRecentSearches) {
       final recentSearches = await _searchService.getRecentSearches();
-      setState(() {
-        _recentSearches = recentSearches;
-      });
+      if (!mounted) {
+        return;
+      }
+      setState(() => _recentSearches = recentSearches);
     }
   }
 
   void _onTextChanged(String value) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      if (value.trim().isNotEmpty && widget.showSuggestions) {
-        _getSuggestions(value);
-      } else if (value.trim().isEmpty && widget.showRecentSearches) {
+      final trimmed = value.trim();
+
+      if (trimmed.isNotEmpty && widget.showSuggestions) {
+        _loadSuggestions(trimmed);
+        return;
+      }
+
+      if (trimmed.isEmpty && widget.showRecentSearches) {
         setState(() {
-          _suggestions = [];
+          _suggestions = <String>[];
           _showDropdown = _recentSearches.isNotEmpty;
         });
-      } else {
-        setState(() {
-          _suggestions = [];
-          _showDropdown = false;
-        });
+        return;
       }
+
+      setState(() {
+        _suggestions = <String>[];
+        _showDropdown = false;
+      });
     });
   }
 
-  void _getSuggestions(String query) async {
+  Future<void> _loadSuggestions(String query) async {
     try {
       final suggestions = await _searchService.getSearchSuggestions(query);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _suggestions = suggestions;
         _showDropdown = suggestions.isNotEmpty;
       });
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
-        _suggestions = [];
+        _suggestions = <String>[];
         _showDropdown = false;
       });
     }
   }
 
   void _performSearch(String query) {
-    if (query.trim().isNotEmpty) {
-      widget.onSearch(query.trim());
-      setState(() {
-        _showDropdown = false;
-      });
-      _focusNode.unfocus();
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      return;
     }
+
+    widget.onSearch(trimmed);
+    setState(() => _showDropdown = false);
+    _focusNode.unfocus();
   }
 
   void _selectSuggestion(String suggestion) {
@@ -166,7 +181,7 @@ class _SearchWidgetState extends State<SearchWidget> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -193,10 +208,11 @@ class _SearchWidgetState extends State<SearchWidget> {
                         GestureDetector(
                           onTap: () async {
                             await _searchService.clearRecentSearches();
-                            _loadRecentSearches();
-                            setState(() {
-                              _showDropdown = false;
-                            });
+                            await _loadRecentSearches();
+                            if (!mounted) {
+                              return;
+                            }
+                            setState(() => _showDropdown = false);
                           },
                           child: const Text(
                             'Hapus Semua',
@@ -209,20 +225,18 @@ class _SearchWidgetState extends State<SearchWidget> {
                       ],
                     ),
                   ),
-                  ..._recentSearches
-                      .map(
-                        (search) => ListTile(
-                          dense: true,
-                          leading: const Icon(
-                            Icons.history,
-                            size: 20,
-                            color: AppColors.grey,
-                          ),
-                          title: Text(search),
-                          onTap: () => _selectSuggestion(search),
-                        ),
-                      )
-                      .toList(),
+                  ..._recentSearches.map(
+                    (search) => ListTile(
+                      dense: true,
+                      leading: const Icon(
+                        Icons.history,
+                        size: 20,
+                        color: AppColors.grey,
+                      ),
+                      title: Text(search),
+                      onTap: () => _selectSuggestion(search),
+                    ),
+                  ),
                 ],
 
                 // Suggestions Section
@@ -239,20 +253,18 @@ class _SearchWidgetState extends State<SearchWidget> {
                         ),
                       ),
                     ),
-                  ..._suggestions
-                      .map(
-                        (suggestion) => ListTile(
-                          dense: true,
-                          leading: const Icon(
-                            Icons.search,
-                            size: 20,
-                            color: AppColors.grey,
-                          ),
-                          title: Text(suggestion),
-                          onTap: () => _selectSuggestion(suggestion),
-                        ),
-                      )
-                      .toList(),
+                  ..._suggestions.map(
+                    (suggestion) => ListTile(
+                      dense: true,
+                      leading: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: AppColors.grey,
+                      ),
+                      title: Text(suggestion),
+                      onTap: () => _selectSuggestion(suggestion),
+                    ),
+                  ),
                 ],
               ],
             ),
